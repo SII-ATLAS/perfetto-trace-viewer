@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import unicodedata
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -68,6 +69,47 @@ PROXY_ENV_KEYS = {
     "HTTPS_PROXY",
     "ALL_PROXY",
 }
+
+
+def color_enabled() -> bool:
+    return sys.stdout.isatty() and os.environ.get("NO_COLOR") is None and os.environ.get("TERM", "") != "dumb"
+
+
+def green(text: str) -> str:
+    if not color_enabled():
+        return text
+    return f"\033[32m{text}\033[0m"
+
+
+def visible_width(text: str) -> int:
+    width = 0
+    for char in text:
+        if unicodedata.combining(char):
+            continue
+        width += 2 if unicodedata.east_asian_width(char) in {"F", "W"} else 1
+    return width
+
+
+def pad_visible(text: str, width: int) -> str:
+    return text + " " * max(0, width - visible_width(text))
+
+
+def shorten_middle(text: str, max_chars: int = 78) -> str:
+    if len(text) <= max_chars:
+        return text
+    keep = max(8, max_chars - 3)
+    left = keep // 2
+    right = keep - left
+    return f"{text[:left]}...{text[-right:]}"
+
+
+def print_box(title: str, rows: list[str]) -> None:
+    inner_width = max(58, visible_width(title) + 8, *(visible_width(row) for row in rows))
+    top_dash_count = max(1, inner_width - visible_width(title) - 1)
+    print(green(f"╭─ {title} " + "─" * top_dash_count + "╮"))
+    for row in rows:
+        print(green("│ ") + pad_visible(row, inner_width) + green(" │"))
+    print(green("╰" + "─" * (inner_width + 2) + "╯"))
 
 
 def runtime_dir(args: argparse.Namespace | None = None) -> Path:
@@ -821,9 +863,6 @@ def open_trace(args: argparse.Namespace) -> None:
     if port_listening(args.bind, args.ui_port):
         raise RuntimeError(f"UI 端口 {args.bind}:{args.ui_port} 已经被其它进程占用。")
 
-    for note in port_notes:
-        print(note)
-
     rpc_log = logs_dir(rt) / f"trace_processor_{args.rpc_port}.log"
     ui_log = logs_dir(rt) / f"ui_wrapper_{args.ui_port}.log"
 
@@ -906,34 +945,23 @@ def open_trace(args: argparse.Namespace) -> None:
         write_instances(rt, instances)
         raise
 
-    print("")
-    print("Perfetto trace 查看服务已就绪。")
-    print(f"  trace 文件：{trace}")
-    print(f"  trace 名称：{display_name}")
-    print(f"  UI 端口：   {args.ui_port}  （打开这个端口的转发 URL）")
-    print(f"  RPC 端口：  {args.rpc_port}  （内部使用，不要直接打开）")
-    print(f"  绑定地址：  {args.bind}")
-    print(f"  UI 进程：   pid={ui_proc.pid}")
-    print(f"  RPC 进程：  pid={rpc_proc.pid}")
-    print(f"  日志：      {ui_log}")
     ui_url = proxy_url_for_port(args.ui_port)
-    if ui_url:
-        print(f"  跳转链接：  {ui_url}")
+    open_url = ui_url or viewer_url(f"http://{args.bind}:{args.ui_port}")
+    port_mode = "自动选择" if port_notes else "用户指定"
+
     print("")
-    print("下一步：")
-    if ui_url:
-        print("  1. 直接点击上面的跳转链接；或在 VS Code / Notebook 的端口面板打开 UI 端口。")
-    else:
-        print(f"  1. 在 VS Code / Notebook 的端口面板打开或转发 UI 端口 {args.ui_port}。")
-    print("  2. 浏览器打开后应直接进入 Perfetto UI 并自动加载 trace。")
-    print("  3. 如需再看另一个 trace，直接再次运行 open；未指定端口时会自动选择下一组可用端口。")
-    print("     perfetto-trace open /path/to/other.pt.trace.json")
-    print("")
-    print("常用管理命令：")
-    print(f"  perfetto-trace status --ui-port {args.ui_port}")
-    print(f"  perfetto-trace check --ui-port {args.ui_port}")
-    print(f"  perfetto-trace logs --ui-port {args.ui_port}")
-    print(f"  perfetto-trace stop --ui-port {args.ui_port}")
+    print_box(
+        "Perfetto trace 已就绪",
+        [
+            "✅ 服务已启动，浏览器打开后会自动加载 trace",
+            f"Trace  {shorten_middle(display_name)}",
+            f"端口   {port_mode}  UI={args.ui_port}  RPC={args.rpc_port}",
+            f"UI     {args.bind}:{args.ui_port}  pid={ui_proc.pid}",
+            f"RPC    {args.bind}:{args.rpc_port}  pid={rpc_proc.pid}",
+            f"日志   {shorten_middle(str(ui_log))}",
+        ],
+    )
+    print(f"打开链接：{open_url}")
 
 
 def print_status(args: argparse.Namespace) -> None:
