@@ -1,0 +1,4 @@
+interface:
+  display_name: "Perfetto Trace Viewer"
+  short_description: "服务器侧打开 Perfetto trace"
+  default_prompt: "使用 $perfetto-trace-viewer 在服务器侧打开一个 profiler trace，并提供可直接访问的转发 UI 端口。"
