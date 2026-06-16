@@ -8,7 +8,7 @@
 - 人在浏览器里的 VS Code Web / Notebook 里操作远程服务器；
 - 希望打开一个端口转发页面后，Perfetto UI 自动加载 trace；
 - 希望同时打开多个 trace，用不同端口并排比较；
-- 希望命令行直接打印可点击的转发链接。
+- 希望命令行直接打印可点击的打开链接。
 
 ## 工作原理
 
@@ -30,15 +30,31 @@ wrapper 只在运行时适配 Perfetto UI，不修改官方脚本、包或下载
 
 可选：
 
-- VS Code Web / Notebook 环境里的 `VSCODE_PROXY_URI`。如果存在，命令会自动打印可点击跳转链接。
+- VS Code Web / Notebook 环境里的 `VSCODE_PROXY_URI`。如果存在，命令会自动打印可点击打开链接。
 - 如果服务器下载必须走环境代理，给 `install` 或 `open` 加 `--use-env-proxy`。
 
 ## 安装
 
-把本目录放到任意位置，例如：
+推荐从 GitHub release 下载压缩包安装。这种方式不需要保留 Git 历史，迁移到新服务器时也更直接。
+
+### 方式一：下载 release 压缩包（推荐）
+
+在服务器上执行：
 
 ```bash
-git clone <repo-url> ~/tools/perfetto-trace-viewer
+mkdir -p ~/tools
+cd ~/tools
+curl -L -o perfetto-trace-viewer-1.0.0.tar.gz \
+  https://github.com/SII-ATLAS/perfetto-trace-viewer/releases/download/v1.0.0/perfetto-trace-viewer-1.0.0.tar.gz
+tar -xzf perfetto-trace-viewer-1.0.0.tar.gz
+cd perfetto-trace-viewer
+```
+
+如果服务器不能直接访问 GitHub，可以先在本机浏览器下载 release 里的 `perfetto-trace-viewer-1.0.0.tar.gz`，上传到服务器后解压：
+
+```bash
+mkdir -p ~/tools
+tar -xzf /path/to/perfetto-trace-viewer-1.0.0.tar.gz -C ~/tools
 cd ~/tools/perfetto-trace-viewer
 ```
 
@@ -50,9 +66,26 @@ scripts/perfetto-trace install
 
 首次 `install` 会下载官方 `trace_processor` bootstrapper、平台二进制，以及 Perfetto UI 核心静态资源。后续会复用 `.runtime/` 缓存。
 
+如果服务器下载必须走当前环境里的代理变量：
+
+```bash
+scripts/perfetto-trace install --use-env-proxy
+```
+
 检查安装：
 
 ```bash
+scripts/perfetto-trace check
+```
+
+### 方式二：从 Git 仓库安装
+
+如果希望跟踪最新 `main` 分支，可以直接 clone：
+
+```bash
+git clone https://github.com/SII-ATLAS/perfetto-trace-viewer.git ~/tools/perfetto-trace-viewer
+cd ~/tools/perfetto-trace-viewer
+scripts/perfetto-trace install
 scripts/perfetto-trace check
 ```
 
@@ -100,13 +133,11 @@ perfetto-trace open /path/to/trace.pt.trace.json
 
 不指定端口时，脚本从 `19002/9001` 起自动扫描下一组可用端口。命令完成后会打印：
 
-- trace 文件路径；
 - trace 显示名称；
-- UI 端口；
-- RPC 端口；
-- 后台进程 PID；
-- 日志路径；
-- 可点击跳转链接，如果当前环境提供 `VSCODE_PROXY_URI`。
+- UI/RPC 端口；
+- UI/RPC 后台进程 PID；
+- UI wrapper 日志路径；
+- 可点击打开链接，如果当前环境提供 `VSCODE_PROXY_URI`。
 
 同时打开多个 trace：
 
@@ -164,7 +195,7 @@ VSCODE_PROXY_URI='https://example/proxy/{{port}}/'
 如果它存在，`open` 和 `status` 会自动把 `{{port}}` 替换成 UI 端口，并输出类似：
 
 ```text
-跳转链接：https://example/proxy/19002/#!/viewer?local_cache_key
+打开链接：https://example/proxy/19002/#!/viewer?local_cache_key
 ```
 
 点击这个链接后，Perfetto UI 应该直接打开并加载 trace。Perfetto 页面的 trace 标题会显示 trace 文件名，而不是默认的 `RPC @ <proxy-host>`。
@@ -174,8 +205,8 @@ VSCODE_PROXY_URI='https://example/proxy/{{port}}/'
 当用户要求打开 trace：
 
 1. 运行 `perfetto-trace open <trace-path>`。
-2. 等输出出现 `Perfetto trace 查看服务已就绪。`。
-3. 把输出中的 `跳转链接` 和 `UI 端口` 告诉用户。
+2. 等输出出现 `Perfetto trace 已就绪`。
+3. 把输出中的 `打开链接` 和 `UI 端口` 告诉用户。
 4. 如果用户说页面空白或 trace 没加载，运行：
 
 ```bash
@@ -219,7 +250,7 @@ rm -rf .runtime
 
 ### 只能看到 `Perfetto Trace Processor RPC Server`
 
-你打开的是 RPC 端口，不是 UI 端口。请打开命令输出里的 `UI 端口` 或 `跳转链接`。
+你打开的是 RPC 端口，不是 UI 端口。请打开命令输出里的 `UI 端口` 或 `打开链接`。
 
 ### 页面打开了但没有 trace
 
